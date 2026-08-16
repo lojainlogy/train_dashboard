@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>MetroSync — Admin Panel</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  input, select, textarea, button { padding: 8px 12px; font-size: 1rem; width: 100%; margin-bottom: 10px; box-sizing: border-box; }
+  button { background: #2b6cb0; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #235a91; }
+  #status { margin-top: 10px; font-size: 0.9rem; }
+  fieldset { border: 1px solid #ddd; border-radius: 6px; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+  <h1>🛠️ MetroSync — Admin Panel</h1>
+
+  <fieldset>
+    <legend>Login</legend>
+    <input id="email" type="email" placeholder="admin@metrosync.local" />
+    <input id="password" type="password" placeholder="Password" />
+    <button id="loginBtn">Log in</button>
+    <div id="loginStatus"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Post Announcement</legend>
+    <select id="station"><option value="">Select a station…</option></select>
+    <textarea id="text" rows="3" placeholder="Announcement text"></textarea>
+    <button id="postBtn">Post announcement</button>
+    <div id="status"></div>
+  </fieldset>
+
+  <script>
+    let token = null;
+    const loginStatus = document.getElementById('loginStatus');
+    const status = document.getElementById('status');
+    const stationSelect = document.getElementById('station');
+
+    async function loadStations() {
+      const res = await fetch('/api/v1/stations');
+      const { data } = await res.json();
+      data.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s._id;
+        opt.textContent = `${s.name} (${s.line})`;
+        stationSelect.appendChild(opt);
+      });
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        token = data.token;
+        loginStatus.textContent = `Logged in as ${data.admin.email}`;
+        loginStatus.style.color = 'green';
+      } else {
+        loginStatus.textContent = data.message || 'Login failed';
+        loginStatus.style.color = 'red';
+      }
+    });
+
+    document.getElementById('postBtn').addEventListener('click', async () => {
+      if (!token) {
+        status.textContent = 'Log in first';
+        status.style.color = 'red';
+        return;
+      }
+      const station = stationSelect.value;
+      const text = document.getElementById('text').value;
+      const res = await fetch('/api/v1/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text, station }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        status.textContent = 'Announcement posted!';
+        status.style.color = 'green';
+        document.getElementById('text').value = '';
+      } else {
+        status.textContent = data.message || JSON.stringify(data.errors);
+        status.style.color = 'red';
+      }
+    });
+
+    loadStations();
+  </script>
+</body>
+</html>

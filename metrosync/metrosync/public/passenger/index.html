@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>MetroSync — Passenger View</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  select, button { padding: 8px 12px; font-size: 1rem; }
+  #viewers { color: #555; margin: 8px 0 20px; }
+  ul#announcements { list-style: none; padding: 0; }
+  li { background: #f4f4f6; border-left: 4px solid #2b6cb0; padding: 10px 14px; margin-bottom: 8px; border-radius: 4px; }
+  time { display: block; font-size: 0.8rem; color: #777; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <h1>🚇 MetroSync — Passenger View</h1>
+  <label for="station">Station:</label>
+  <select id="station"><option value="">Select a station…</option></select>
+  <div id="viewers">Viewers here: —</div>
+  <ul id="announcements"></ul>
+
+  <script>
+    const socket = io();
+    const stationSelect = document.getElementById('station');
+    const viewersEl = document.getElementById('viewers');
+    const list = document.getElementById('announcements');
+    let currentStation = null;
+
+    async function loadStations() {
+      const res = await fetch('/api/v1/stations');
+      const { data } = await res.json();
+      data.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s._id;
+        opt.textContent = `${s.name} (${s.line})`;
+        stationSelect.appendChild(opt);
+      });
+    }
+
+    async function loadAnnouncements(stationId) {
+      list.innerHTML = '';
+      const res = await fetch(`/api/v1/announcements/station/${stationId}`);
+      const { items } = await res.json();
+      items.forEach(addAnnouncement);
+    }
+
+    function addAnnouncement(a) {
+      const li = document.createElement('li');
+      li.textContent = a.text;
+      const t = document.createElement('time');
+      t.textContent = new Date(a.timestamp).toLocaleString();
+      li.appendChild(t);
+      list.prepend(li);
+    }
+
+    stationSelect.addEventListener('change', async (e) => {
+      currentStation = e.target.value;
+      if (!currentStation) return;
+      socket.emit('joinStation', currentStation);
+      await loadAnnouncements(currentStation);
+    });
+
+    socket.on('presenceUpdate', ({ stationId, viewers }) => {
+      if (stationId === currentStation) {
+        viewersEl.textContent = `Viewers here: ${viewers}`;
+      }
+    });
+
+    socket.on('newAnnouncement', (a) => {
+      if (a.station?._id === currentStation || a.station === currentStation) {
+        addAnnouncement(a);
+      }
+    });
+
+    loadStations();
+  </script>
+</body>
+</html>
